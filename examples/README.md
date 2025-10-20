@@ -99,6 +99,70 @@ LoadImage ──────────────────→ BarycentricW
 
 ---
 
+### 📁 `workflow_pipeline_b2_cotracker.json` ✨ NEW
+
+**Pipeline B2: CoTracker Mesh-Warp (Advanced - Temporal Stability)**
+
+**What it does:**
+- Tracks 4K-70K sparse points using Meta's CoTracker3 (ECCV 2024)
+- Builds deformation mesh from point trajectories using Delaunay triangulation
+- Warps still image using barycentric interpolation (same as Pipeline B)
+- Transformer-based tracking sees entire video for temporal stability
+- Handles occlusions and complex organic motion
+
+**Best for:**
+- Temporal stability (reduces flicker vs frame-by-frame flow)
+- Organic motion (character faces, hands, fabric)
+- Large deformations with occlusions
+- Videos where points appear/disappear
+- When Pipeline B has temporal jitter
+
+**Nodes used:**
+```
+LoadVideo → GetVideoComponents → GridPointGeneratorNode
+                                        ↓
+                                  CoTrackerNode (external)
+                                        ↓
+                                 MeshFromCoTracker (new)
+                                        ↓
+LoadImage ──────────────────→ BarycentricWarp (shared with B)
+                                        ↓
+                                   HiResWriter
+```
+
+**Settings:**
+- `grid_size`: 64 (4096 points for 64x64 grid)
+- `max_num_of_points`: 4096 (can go lower for speed)
+- `confidence_threshold`: 0.90 (filter unreliable tracks)
+- `min_distance`: 30 (minimum spacing between points)
+- `min_triangle_area`: 100.0 (same as Pipeline B)
+- `interpolation`: linear (recommended for mesh)
+
+**Requirements:**
+- **External dependency:** CoTracker node must be installed
+  ```bash
+  cd ComfyUI/custom_nodes
+  git clone https://github.com/s9roll7/comfyui_cotracker_node.git
+  ```
+- **Model download:** CoTracker3 (~500MB) auto-downloads from torch.hub on first use
+- **VRAM:** 8-12GB (lower than Pipeline B thanks to sparse tracking)
+
+**Performance:**
+- ~10-15 seconds per frame (16K output)
+- Slower than Pipeline A, similar to Pipeline B
+- Uses less VRAM than dense optical flow
+
+**Comparison to Pipeline B:**
+| Feature | Pipeline B (RAFT Mesh) | Pipeline B2 (CoTracker Mesh) |
+|---------|------------------------|------------------------------|
+| Tracking | Dense optical flow | Sparse point tracking |
+| Temporal stability | Good | **Excellent** |
+| Occlusion handling | Limited | **Excellent** |
+| Speed | Fast | Medium |
+| VRAM | 12-24GB | 8-12GB |
+
+---
+
 ### 📁 `workflow_pipeline_c_proxy.json`
 
 **Pipeline C: 3D-Proxy (Experimental)**
@@ -266,13 +330,14 @@ Create a loop wrapper or use ComfyUI's batch features to process multiple videos
 **Hardware:** RTX 4090, 24GB VRAM
 **Input:** 1080p video (5 sec @ 24fps = 120 frames) → 16K still
 
-| Pipeline | Time per frame | Total time | Notes |
-|----------|---------------|------------|-------|
-| A (Flow) | ~7 seconds    | ~14 min    | Recommended |
-| B (Mesh) | ~12 seconds   | ~24 min    | Better for deformation |
-| C (Proxy)| ~8 seconds    | ~16 min    | Experimental |
+| Pipeline | Time per frame | Total time | VRAM | Notes |
+|----------|---------------|------------|------|-------|
+| A (Flow) | ~7 seconds    | ~14 min    | 12-24GB | Recommended |
+| B (Mesh) | ~12 seconds   | ~24 min    | 12-24GB | Better for deformation |
+| B2 (CoTracker) | ~10 seconds | ~20 min | 8-12GB | Best temporal stability |
+| C (Proxy)| ~8 seconds    | ~16 min    | 12GB | Experimental |
 
-**Settings used:** tile_size=2048, overlap=128, raft_iters=12
+**Settings used:** tile_size=2048, overlap=128, raft_iters=12 (A/B), grid_size=64 (B2)
 
 ---
 

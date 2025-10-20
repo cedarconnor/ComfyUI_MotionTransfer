@@ -22,6 +22,14 @@ This node pack provides three complementary pipelines for motion transfer:
 
 **Best for:** Large deformations, character animation, fabric/cloth
 
+### **Pipeline B2: CoTracker Mesh-Warp** (Advanced - New!)
+- Track 4K-70K points using Meta's CoTracker (ECCV 2024)
+- Build deformation mesh from point trajectories
+- Transformer-based temporal stability (tracks entire video)
+- Handles occlusions and complex organic motion
+
+**Best for:** Temporal stability, organic motion, large deformations, character faces/hands
+
 ### **Pipeline C: 3D-Proxy** (Experimental)
 - Monocular depth estimation
 - 3D proxy reprojection with parallax handling
@@ -76,7 +84,18 @@ pip install git+https://github.com/princeton-vl/RAFT.git
 wget https://github.com/princeton-vl/RAFT/releases/download/v1.0/raft-sintel.pth
 ```
 
-4. Restart ComfyUI
+4. **(Optional) Install CoTracker for Pipeline B2:**
+
+If you want to use Pipeline B2 (CoTracker Mesh-Warp), install the CoTracker node:
+
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/s9roll7/comfyui_cotracker_node.git
+```
+
+CoTracker models (~500MB) will auto-download from torch.hub on first use.
+
+5. Restart ComfyUI
 
 ## Node Reference
 
@@ -159,6 +178,37 @@ wget https://github.com/princeton-vl/RAFT/releases/download/v1.0/raft-sintel.pth
 - **Parameters:**
   - `interpolation`: linear/cubic
 
+### Pipeline B2 Nodes (CoTracker Mesh-Warp)
+
+Pipeline B2 uses the external CoTracker node plus one new node for mesh conversion. All downstream nodes (BarycentricWarp, TemporalConsistency, HiResWriter) are shared with Pipeline B.
+
+#### CoTrackerNode (External)
+- **Source:** [s9roll7/comfyui_cotracker_node](https://github.com/s9roll7/comfyui_cotracker_node)
+- **Input:** Video frames, optional tracking points
+- **Output:** JSON trajectory data, visualization
+- **Parameters:**
+  - `grid_size`: Grid density (20-64) - higher = more tracking points
+  - `max_num_of_points`: Maximum points to track (100-4096)
+  - `confidence_threshold`: Filter unreliable tracks (0.9)
+  - `min_distance`: Minimum spacing between points (30)
+  - `enable_backward`: Bidirectional tracking for occlusions
+
+**Model:** Uses CoTracker3 (Meta AI, ECCV 2024) - auto-downloads from torch.hub
+
+#### MeshFromCoTracker (New)
+- **Input:** CoTracker JSON trajectory data
+- **Output:** Deformation mesh sequence (compatible with BarycentricWarp)
+- **Parameters:**
+  - `frame_index`: Reference frame for UV coordinates (0)
+  - `min_triangle_area`: Filter degenerate triangles (100.0)
+  - `video_width/height`: Original video resolution
+
+**Technical Details:**
+- Converts sparse point tracks → triangulated mesh using Delaunay
+- Same mesh format as MeshBuilder2D (vertices, faces, UVs)
+- Filters small/degenerate triangles to prevent artifacts
+- UV coordinates normalized to [0,1] for high-res warping
+
 ### Pipeline C Nodes (3D-Proxy)
 
 #### DepthEstimator
@@ -195,8 +245,29 @@ See `examples/` directory for complete workflow JSON files:
 - **`workflow_pipeline_a_searaft.json`** - Flow-Warp with SEA-RAFT (recommended)
 - **`workflow_pipeline_a_flow.json`** - Flow-Warp with original RAFT
 - **`workflow_pipeline_b_mesh.json`** - Mesh-Warp for large deformations
+- **`workflow_pipeline_b2_cotracker.json`** - CoTracker Mesh-Warp for temporal stability (new!)
 - **`workflow_pipeline_c_proxy.json`** - 3D-Proxy for parallax (experimental)
 - **`README.md`** - Detailed workflow usage guide
+
+## Pipeline Comparison
+
+### When to Use Pipeline B vs B2
+
+| Feature | **Pipeline B (RAFT Mesh)** | **Pipeline B2 (CoTracker Mesh)** |
+|---------|---------------------------|----------------------------------|
+| **Tracking Method** | Optical flow (frame-to-frame) | Sparse point tracking (whole video) |
+| **Temporal Stability** | Good | **Excellent** (transformer sees full sequence) |
+| **Occlusion Handling** | Limited | **Excellent** (tracks through occlusions) |
+| **Setup Complexity** | Built-in | Requires external CoTracker node |
+| **Processing Speed** | Fast (~1.4x real-time) | Medium (~1.0x real-time) |
+| **VRAM Usage** | Moderate (12-24GB) | **Lower** (8-12GB for grid_size=64) |
+| **Best For** | General mesh warping | Face/hand animation, organic motion |
+| **Point Density** | Fixed grid | 100-4096 adaptive points |
+
+**Recommendation:**
+- **Start with Pipeline B** if you're new to mesh warping or want faster iterations
+- **Use Pipeline B2** when temporal stability is critical (faces, hands, cloth)
+- Both pipelines share the same BarycentricWarp node, so you can experiment
 
 ## Performance Tips
 

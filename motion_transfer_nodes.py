@@ -1086,6 +1086,158 @@ NODE_CLASS_MAPPINGS["AdaptiveTessellate"] = AdaptiveTessellate
 NODE_DISPLAY_NAME_MAPPINGS["AdaptiveTessellate"] = "Adaptive Tessellate"
 
 # ------------------------------------------------------
+# Node 9B: MeshFromCoTracker - Build mesh from CoTracker trajectories
+# ------------------------------------------------------
+class MeshFromCoTracker:
+    """Build deformation mesh from CoTracker point trajectories.
+
+    Converts sparse point tracks [T, N, 2] from CoTracker into triangulated mesh sequence
+    compatible with BarycentricWarp node. This provides better temporal stability than
+    RAFT-based mesh generation, especially for large deformations and organic motion.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "tracking_results": ("STRING", {
+                    "tooltip": "JSON tracking results from CoTrackerNode. Contains point trajectories [T, N, 2] where T=frames, N=points, 2=XY coordinates."
+                }),
+                "frame_index": ("INT", {
+                    "default": 0,
+                    "min": 0,
+                    "tooltip": "Which frame to use as reference (usually 0). Mesh deformation is relative to this frame's point positions."
+                }),
+                "min_triangle_area": ("FLOAT", {
+                    "default": 100.0,
+                    "min": 1.0,
+                    "max": 10000.0,
+                    "tooltip": "Minimum area for triangles (in pixels²). Filters out degenerate/tiny triangles that can cause artifacts. Same as MeshBuilder2D parameter. 100.0 is recommended."
+                }),
+                "video_width": ("INT", {
+                    "default": 1920,
+                    "min": 64,
+                    "max": 8192,
+                    "tooltip": "Original video width (for UV normalization). Should match the video used for tracking."
+                }),
+                "video_height": ("INT", {
+                    "default": 1080,
+                    "min": 64,
+                    "max": 8192,
+                    "tooltip": "Original video height (for UV normalization). Should match the video used for tracking."
+                }),
+            }
+        }
+
+    RETURN_TYPES = ("MESH",)
+    RETURN_NAMES = ("mesh_sequence",)
+    FUNCTION = "build_mesh_from_tracks"
+    CATEGORY = "MotionTransfer/Mesh"
+
+    def build_mesh_from_tracks(self, tracking_results, frame_index, min_triangle_area, video_width, video_height):
+        """Convert CoTracker trajectories to mesh sequence.
+
+        Args:
+            tracking_results: STRING from CoTrackerNode (ComfyUI returns first item from list)
+                             CoTracker outputs list of JSON strings, one per point
+            frame_index: Reference frame (usually 0)
+            min_triangle_area: Filter threshold for degenerate triangles
+            video_width, video_height: Original video dimensions
+
+        Returns:
+            mesh_sequence: List of mesh dicts (same format as MeshBuilder2D)
+        """
+        import json
+        from scipy.spatial import Delaunay
+
+        # CoTrackerNode returns list of JSON strings via RETURN_TYPES = ("STRING",...)
+        # ComfyUI converts list → newline-separated string when passing to next node
+        # Format: "point1_json\npoint2_json\npoint3_json..."
+        # Each line is: [{"x":500,"y":300}, {"x":502,"y":301}, ...]
+
+        lines = tracking_results.strip().split('\n')
+        if len(lines) == 0:
+            raise ValueError("No tracking data found in tracking_results")
+
+        # Parse each point's trajectory
+        point_trajectories = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                trajectory = json.loads(line)  # List of {"x": int, "y": int}
+                point_trajectories.append(trajectory)
+            except json.JSONDecodeError as e:
+                print(f"Warning: Skipping invalid JSON line: {e}")
+                continue
+
+        if len(point_trajectories) == 0:
+            raise ValueError("No valid trajectory data found in tracking_results")
+
+        N = len(point_trajectories)  # Number of points
+        T = len(point_trajectories[0])  # Number of frames
+
+        print(f"MeshFromCoTracker: Loaded {N} points across {T} frames")
+
+        # Convert to [T, N, 2] array
+        trajectories = np.zeros((T, N, 2), dtype=np.float32)
+        for point_idx, trajectory in enumerate(point_trajectories):
+            for frame_idx, coord in enumerate(trajectory):
+                trajectories[frame_idx, point_idx, 0] = coord['x']
+                trajectories[frame_idx, point_idx, 1] = coord['y']
+
+        # Reference frame (frame 0 or specified)
+        if frame_index >= T:
+            frame_index = 0
+            print(f"Warning: frame_index out of range, using frame 0")
+
+        ref_points = trajectories[frame_index]  # [N, 2]
+
+        # Build UVs from reference positions (normalized [0, 1])
+        uvs = np.array([
+            [x / video_width, y / video_height]
+            for x, y in ref_points
+        ], dtype=np.float32)
+
+        # Delaunay triangulation on reference frame
+        print("Building Delaunay triangulation...")
+        tri = Delaunay(uvs)
+        faces_base = tri.simplices
+
+        # Filter degenerate triangles
+        valid_faces = []
+        for face in faces_base:
+            v0, v1, v2 = ref_points[face]
+            area = 0.5 * abs((v1[0] - v0[0]) * (v2[1] - v0[1]) -
+                            (v2[0] - v0[0]) * (v1[1] - v0[1]))
+            if area >= min_triangle_area:
+                valid_faces.append(face)
+
+        faces = np.array(valid_faces, dtype=np.int32)
+        print(f"Mesh: {N} vertices, {len(faces)} triangles (filtered from {len(faces_base)})")
+
+        # Build mesh for each frame
+        meshes = []
+        for t in range(T):
+            vertices = trajectories[t]  # [N, 2] - deformed positions
+
+            mesh = {
+                'vertices': vertices.astype(np.float32),
+                'faces': faces,
+                'uvs': uvs,
+                'width': video_width,
+                'height': video_height
+            }
+            meshes.append(mesh)
+
+        print(f"✓ Built {len(meshes)} mesh frames from CoTracker trajectories")
+        return (meshes,)
+
+NODE_CLASS_MAPPINGS["MeshFromCoTracker"] = MeshFromCoTracker
+NODE_DISPLAY_NAME_MAPPINGS["MeshFromCoTracker"] = "Mesh From CoTracker"
+
+# ------------------------------------------------------
 # Node 10: BarycentricWarp - Mesh-based warping
 # ------------------------------------------------------
 class BarycentricWarp:
