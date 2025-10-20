@@ -251,14 +251,42 @@ class RAFTFlowExtractor:
                 # ========== Load Original RAFT ==========
                 try:
                     import sys
-                    sys.path.append('path/to/RAFT/core')  # Add RAFT to path if needed
-                    from raft import RAFT
+                    import os
+
+                    # Try to find RAFT in common locations
+                    raft_paths = [
+                        # If cloned to ComfyUI/custom_nodes/RAFT/core
+                        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'RAFT', 'core'),
+                        # If cloned elsewhere and added to PYTHONPATH
+                        'RAFT/core',
+                    ]
+
+                    # Try importing from each possible location
+                    RAFT = None
+                    for path in raft_paths:
+                        if os.path.exists(path) and path not in sys.path:
+                            sys.path.insert(0, path)
+                            try:
+                                from raft import RAFT
+                                print(f"✓ Found RAFT at: {path}")
+                                break
+                            except ImportError:
+                                sys.path.remove(path)
+
+                    # If still not found, try direct import (in case it's already in PYTHONPATH)
+                    if RAFT is None:
+                        from raft import RAFT
+                        print("✓ Found RAFT in PYTHONPATH")
+
                     import argparse
-                except ImportError:
+                except ImportError as e:
                     raise ImportError(
-                        "RAFT not found. Install with:\n"
-                        "pip install git+https://github.com/princeton-vl/RAFT.git\n"
-                        "Or clone and add to PYTHONPATH"
+                        f"RAFT not found. Please install:\n\n"
+                        f"1. Clone RAFT repository:\n"
+                        f"   cd ComfyUI/custom_nodes\n"
+                        f"   git clone https://github.com/princeton-vl/RAFT.git\n\n"
+                        f"2. Restart ComfyUI\n\n"
+                        f"Error details: {e}"
                     )
 
                 # Create RAFT model with default args
