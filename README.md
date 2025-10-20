@@ -54,11 +54,12 @@ pip install -r requirements.txt
 
 **Installation:**
 ```bash
-pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+cd ComfyUI/custom_nodes
+git clone https://github.com/princeton-vl/SEA-RAFT.git
 pip install huggingface-hub
 ```
 
-Models download automatically on first use (~100-200MB, cached to `~/.cache/huggingface`).
+SEA-RAFT will be auto-detected when you restart ComfyUI. Models download automatically on first use (~100-200MB, cached to `~/.cache/huggingface`).
 
 ### Option B: Original RAFT
 

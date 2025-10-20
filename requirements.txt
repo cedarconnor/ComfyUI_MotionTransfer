@@ -12,8 +12,8 @@
 # opencv-contrib-python>=4.6.0 (for guided filter - ximgproc module)
 # Pillow>=10.0.0
 
-# Optical flow models (install separately - see below)
-# SEA-RAFT: pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+# Optical flow models (install separately - see instructions below)
+# SEA-RAFT: Clone the repository (no pip package available)
 # RAFT: pip install git+https://github.com/princeton-vl/RAFT.git
 
 # HuggingFace Hub (for automatic SEA-RAFT model downloads)
@@ -46,7 +46,10 @@ tqdm>=4.66.0
 # 2. Choose your optical flow model:
 #
 #    Option A - SEA-RAFT (Recommended - 2.3x faster, 22% more accurate):
-#    pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+#    cd ComfyUI/custom_nodes
+#    git clone https://github.com/princeton-vl/SEA-RAFT.git
+#
+#    Note: SEA-RAFT will be auto-detected when you restart ComfyUI
 #
 #    Option B - Original RAFT (Backward compatible):
 #    pip install git+https://github.com/princeton-vl/RAFT.git

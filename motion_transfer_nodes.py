@@ -148,24 +148,50 @@ class RAFTFlowExtractor:
             if is_searaft:
                 # ========== Load SEA-RAFT ==========
                 try:
-                    # Try importing SEA-RAFT modules
                     import sys
-                    # Attempt to import from installed package or cloned repo
-                    try:
-                        from core.raft import RAFT as SEARAFT
-                    except ImportError:
-                        # If not in package, try adding to path
-                        sys.path.append('path/to/SEA-RAFT/core')
-                        from raft import RAFT as SEARAFT
+                    import os
+
+                    # Try to find SEA-RAFT in common locations
+                    searaft_paths = [
+                        # If cloned to ComfyUI/custom_nodes/SEA-RAFT/core
+                        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'SEA-RAFT', 'core'),
+                        # If cloned elsewhere and added to PYTHONPATH
+                        'SEA-RAFT/core',
+                    ]
+
+                    # Try importing from each possible location
+                    SEARAFT = None
+                    for path in searaft_paths:
+                        if os.path.exists(path) and path not in sys.path:
+                            sys.path.insert(0, path)
+                            try:
+                                from raft import RAFT as SEARAFT
+                                print(f"✓ Found SEA-RAFT at: {path}")
+                                break
+                            except ImportError:
+                                sys.path.remove(path)
+
+                    # If still not found, try direct import (in case it's already in PYTHONPATH)
+                    if SEARAFT is None:
+                        try:
+                            from core.raft import RAFT as SEARAFT
+                            print("✓ Found SEA-RAFT in PYTHONPATH")
+                        except ImportError:
+                            from raft import RAFT as SEARAFT
+                            print("✓ Found SEA-RAFT in system path")
 
                     from huggingface_hub import hf_hub_download
+
                 except ImportError as e:
                     raise ImportError(
-                        f"SEA-RAFT or huggingface_hub not found. Install with:\n"
-                        f"pip install git+https://github.com/princeton-vl/SEA-RAFT.git\n"
-                        f"pip install huggingface-hub>=0.20.0\n"
-                        f"Or clone SEA-RAFT repo and add to PYTHONPATH\n"
-                        f"Error: {e}"
+                        f"SEA-RAFT not found. Please install:\n\n"
+                        f"1. Clone SEA-RAFT repository:\n"
+                        f"   cd ComfyUI/custom_nodes\n"
+                        f"   git clone https://github.com/princeton-vl/SEA-RAFT.git\n\n"
+                        f"2. Install huggingface-hub:\n"
+                        f"   pip install huggingface-hub>=0.20.0\n\n"
+                        f"3. Restart ComfyUI\n\n"
+                        f"Error details: {e}"
                     )
 
                 # Map model names to HuggingFace repos
