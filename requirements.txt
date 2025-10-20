@@ -1,36 +1,77 @@
 # ComfyUI Motion Transfer Requirements
+# Minimal requirements to avoid conflicts with other ComfyUI nodes
 
-# Core dependencies
-torch>=2.2.0  # Upgraded for SEA-RAFT compatibility
-torchvision>=0.15.0
-numpy>=1.24.0
-opencv-python>=4.8.0
-opencv-contrib-python>=4.8.0  # For guided filter (ximgproc)
+# NOTE: Most dependencies (torch, numpy, opencv, Pillow) are already installed
+# by ComfyUI or other custom nodes. We only install what's missing.
 
-# Optical flow models
-# Original RAFT (install from source):
-# pip install git+https://github.com/princeton-vl/RAFT.git
+# Core dependencies - already in ComfyUI, listed for reference
+# torch>=2.0.0 (SEA-RAFT needs 2.2.0+, but RAFT works with 2.0.0+)
+# torchvision>=0.15.0
+# numpy>=1.24.0 (compatible with 1.x and 2.x)
+# opencv-python>=4.6.0 (compatible with 4.6.0-4.12.0+)
+# opencv-contrib-python>=4.6.0 (for guided filter - ximgproc module)
+# Pillow>=10.0.0
 
-# SEA-RAFT (recommended - faster and more accurate):
-# pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+# Optical flow models (install separately - see below)
+# SEA-RAFT: pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+# RAFT: pip install git+https://github.com/princeton-vl/RAFT.git
 
 # HuggingFace Hub (for automatic SEA-RAFT model downloads)
 huggingface-hub>=0.20.0
 
 # Image I/O
-Pillow>=10.0.0
 imageio>=2.31.0
 
-# High-res file formats (optional but recommended)
-# Note: EXR support is optional - if installation fails, you can still use PNG/JPG output
-# OpenEXR 3.x includes Imath bundled, no separate install needed
-OpenEXR>=1.3.0  # For 16K EXR export
-
 # Mesh processing (for Pipeline B)
-scipy>=1.11.0  # For Delaunay triangulation
-
-# Depth estimation (for Pipeline C - optional)
-# timm>=0.9.0  # For DPT/MiDaS models (uncomment if using real depth estimation)
+scipy>=1.11.0
 
 # Utilities
-tqdm>=4.66.0  # Progress bars
+tqdm>=4.66.0
+
+# Optional: High-res file formats (EXR export)
+# If this fails to install on Windows, you can still use PNG/JPG output
+# OpenEXR>=1.3.0
+
+# Optional: Depth estimation (for Pipeline C)
+# Only needed if you want real depth estimation (experimental feature)
+# timm>=0.9.0
+
+# ============================================================================
+# INSTALLATION INSTRUCTIONS
+# ============================================================================
+#
+# 1. Install base requirements (this file):
+#    pip install -r requirements.txt
+#
+# 2. Choose your optical flow model:
+#
+#    Option A - SEA-RAFT (Recommended - 2.3x faster, 22% more accurate):
+#    pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+#
+#    Option B - Original RAFT (Backward compatible):
+#    pip install git+https://github.com/princeton-vl/RAFT.git
+#
+# 3. (Optional) For EXR support on Windows:
+#    pip install OpenEXR>=1.3.0
+#    If this fails, EXR export won't work but PNG/JPG will still work.
+#
+# 4. Restart ComfyUI
+#
+# ============================================================================
+# DEPENDENCY CONFLICTS
+# ============================================================================
+#
+# If you see dependency conflicts with other custom nodes:
+# - This is normal in ComfyUI environments
+# - The package will work with a wide range of versions
+# - opencv-python: Works with 4.6.0 - 4.12.0+
+# - numpy: Works with both 1.x (e.g., 1.26.4) and 2.x (e.g., 2.2.6)
+# - torch: SEA-RAFT needs 2.2.0+, RAFT works with 2.0.0+
+#
+# If other nodes require older versions (e.g., nerfstudio needs opencv 4.6.0):
+# - Don't upgrade those packages
+# - Motion Transfer will work with the older versions
+# - You may not be able to use SEA-RAFT (needs torch 2.2.0+)
+# - Use original RAFT instead, which works with older versions
+#
+# ============================================================================
