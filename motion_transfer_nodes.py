@@ -42,15 +42,15 @@ class RAFTFlowExtractor:
                     "tooltip": "Refinement iterations. SEA-RAFT needs fewer (6-8) than RAFT (12-20) for same quality. Default 8 works well for both."
                 }),
                 "model_name": ([
+                    "raft-sintel",
+                    "raft-things",
+                    "raft-small",
                     "sea-raft-small",
                     "sea-raft-medium",
-                    "sea-raft-large",
-                    "raft-things",
-                    "raft-sintel",
-                    "raft-small"
+                    "sea-raft-large"
                 ], {
-                    "default": "sea-raft-medium",
-                    "tooltip": "Optical flow model. SEA-RAFT (recommended): 2.3x faster, 22% more accurate (ECCV 2024 Best Paper Candidate). RAFT: original (2020). 'sea-raft-medium': best speed/quality balance for 12-24GB VRAM. 'sea-raft-small': faster for 8GB VRAM. 'sea-raft-large': best quality for 24GB+ VRAM."
+                    "default": "raft-sintel",
+                    "tooltip": "Optical flow model. Default 'raft-sintel': works out-of-box, no extra install. SEA-RAFT (recommended if installed): 2.3x faster, 22% more accurate (ECCV 2024 Best Paper Candidate), requires manual install (see README). RAFT models work immediately. SEA-RAFT models require: git clone https://github.com/princeton-vl/SEA-RAFT.git"
                 }),
             }
         }
@@ -549,6 +549,14 @@ class TileWarp16K:
         Returns:
             warped_sequence: [B, H, W, C] warped frames
         """
+        # Validate overlap < tile_size to prevent infinite loop
+        if overlap >= tile_size:
+            raise ValueError(
+                f"overlap ({overlap}) must be less than tile_size ({tile_size}). "
+                f"This would cause step = tile_size - overlap = {tile_size - overlap}, "
+                f"freezing the tiling loop. Please reduce overlap or increase tile_size."
+            )
+
         if isinstance(still_image, torch.Tensor):
             still_image = still_image.cpu().numpy()
         if isinstance(stmap, torch.Tensor):
@@ -734,13 +742,24 @@ class TemporalConsistency:
             flow = flow.cpu().numpy()
 
         batch_size = frames.shape[0]
+        flow_count = flow.shape[0]
         h, w = frames.shape[1:3]
+
+        # Validate flow array size
+        if flow_count != batch_size - 1:
+            raise ValueError(
+                f"Flow array size mismatch: expected {batch_size - 1} flow fields "
+                f"for {batch_size} frames, but got {flow_count}. "
+                f"Flow should contain transitions between consecutive frames (B-1 entries for B frames)."
+            )
 
         stabilized = [frames[0]]  # First frame unchanged
 
         for t in range(1, batch_size):
             current_frame = frames[t]
             prev_stabilized = stabilized[-1]
+            # Flow index: flow[0] is frame0→frame1, flow[1] is frame1→frame2, etc.
+            # For frame t, we need flow from frame(t-1) to frame(t), which is flow[t-1]
             flow_fwd = flow[t-1]  # Flow from t-1 to t
 
             # Warp previous stabilized frame forward
