@@ -1,15 +1,21 @@
 # ComfyUI Motion Transfer Requirements
 
 # Core dependencies
-torch>=2.0.0
+torch>=2.2.0  # Upgraded for SEA-RAFT compatibility
 torchvision>=0.15.0
 numpy>=1.24.0
 opencv-python>=4.8.0
 opencv-contrib-python>=4.8.0  # For guided filter (ximgproc)
 
-# Optical flow (RAFT)
-# Install from source:
+# Optical flow models
+# Original RAFT (install from source):
 # pip install git+https://github.com/princeton-vl/RAFT.git
+
+# SEA-RAFT (recommended - faster and more accurate):
+# pip install git+https://github.com/princeton-vl/SEA-RAFT.git
+
+# HuggingFace Hub (for automatic SEA-RAFT model downloads)
+huggingface-hub>=0.20.0
 
 # Image I/O
 Pillow>=10.0.0

@@ -18,13 +18,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {}
 # Node 2: RAFTFlowExtractor - Extract optical flow using RAFT
 # ------------------------------------------------------
 class RAFTFlowExtractor:
-    """Extract dense optical flow between consecutive frames using RAFT (PyTorch).
+    """Extract dense optical flow between consecutive frames using RAFT or SEA-RAFT.
 
-    Returns flow fields and confidence maps for motion transfer pipeline.
+    Supports both original RAFT (2020) and SEA-RAFT (2024 ECCV - 2.3x faster, 22% more accurate).
+    Returns flow fields and confidence/uncertainty maps for motion transfer pipeline.
     """
 
     _model = None
     _model_path = None
+    _model_type = None  # Track whether loaded model is 'raft' or 'searaft'
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -34,14 +36,21 @@ class RAFTFlowExtractor:
                     "tooltip": "Video frames from ComfyUI video loader. Expects [B, H, W, C] batch of images."
                 }),
                 "raft_iters": ("INT", {
-                    "default": 12,
+                    "default": 8,
                     "min": 6,
                     "max": 32,
-                    "tooltip": "Number of refinement iterations for RAFT. Higher values (16-20) give more accurate flow but take longer. Lower values (6-8) are faster but less precise. Default 12 is a good balance."
+                    "tooltip": "Refinement iterations. SEA-RAFT needs fewer (6-8) than RAFT (12-20) for same quality. Default 8 works well for both."
                 }),
-                "model_name": (["raft-things", "raft-sintel", "raft-small"], {
-                    "default": "raft-sintel",
-                    "tooltip": "RAFT model variant. 'raft-sintel': best for natural videos (recommended). 'raft-things': trained on synthetic data. 'raft-small': faster but less accurate."
+                "model_name": ([
+                    "sea-raft-small",
+                    "sea-raft-medium",
+                    "sea-raft-large",
+                    "raft-things",
+                    "raft-sintel",
+                    "raft-small"
+                ], {
+                    "default": "sea-raft-medium",
+                    "tooltip": "Optical flow model. SEA-RAFT (recommended): 2.3x faster, 22% more accurate (ECCV 2024 Best Paper Candidate). RAFT: original (2020). 'sea-raft-medium': best speed/quality balance for 12-24GB VRAM. 'sea-raft-small': faster for 8GB VRAM. 'sea-raft-large': best quality for 24GB+ VRAM."
                 }),
             }
         }
@@ -56,17 +65,17 @@ class RAFTFlowExtractor:
 
         Args:
             images: Tensor [B, H, W, C] in range [0, 1]
-            raft_iters: Number of RAFT refinement iterations
-            model_name: RAFT model variant to use
+            raft_iters: Number of refinement iterations
+            model_name: Model variant to use (RAFT or SEA-RAFT)
 
         Returns:
             flow: Tensor [B-1, H, W, 2] containing (u, v) flow vectors
-            confidence: Tensor [B-1, H, W, 1] containing flow confidence scores
+            confidence: Tensor [B-1, H, W, 1] containing flow confidence/uncertainty scores
         """
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Load RAFT model (cached)
-        model = self._load_model(model_name, device)
+        # Load model (RAFT or SEA-RAFT, cached)
+        model, model_type = self._load_model(model_name, device)
 
         # Convert ComfyUI format [B, H, W, C] to torch [B, C, H, W]
         if isinstance(images, np.ndarray):
@@ -91,16 +100,30 @@ class RAFTFlowExtractor:
                     img1 = pad(img1, (0, pad_w, 0, pad_h), mode='replicate')
                     img2 = pad(img2, (0, pad_w, 0, pad_h), mode='replicate')
 
-                # Run RAFT
-                flow_low, flow_up = model(img1, img2, iters=raft_iters, test_mode=True)
+                # Run model (RAFT or SEA-RAFT)
+                if model_type == 'searaft':
+                    # SEA-RAFT returns uncertainty as third output
+                    flow_low, flow_up, uncertainty = model(img1, img2, iters=raft_iters, test_mode=True)
+                else:
+                    # Original RAFT returns only flow
+                    flow_low, flow_up = model(img1, img2, iters=raft_iters, test_mode=True)
+                    uncertainty = None
 
                 # Remove padding
                 if pad_h > 0 or pad_w > 0:
                     flow_up = flow_up[:, :, :h, :w]
+                    if uncertainty is not None:
+                        uncertainty = uncertainty[:, :, :h, :w]
 
-                # Compute confidence from flow magnitude and smoothness
-                flow_mag = torch.sqrt(flow_up[:, 0:1]**2 + flow_up[:, 1:2]**2)
-                conf = torch.exp(-flow_mag / 10.0)  # Simple confidence heuristic
+                # Compute confidence
+                if model_type == 'searaft' and uncertainty is not None:
+                    # Use SEA-RAFT's native uncertainty (better than heuristic)
+                    # Uncertainty is already [1, 1, H, W], convert to confidence
+                    conf = 1.0 - torch.clamp(uncertainty, 0, 1)
+                else:
+                    # Use heuristic confidence for original RAFT
+                    flow_mag = torch.sqrt(flow_up[:, 0:1]**2 + flow_up[:, 1:2]**2)
+                    conf = torch.exp(-flow_mag / 10.0)
 
                 flows.append(flow_up[0].permute(1, 2, 0).cpu())  # [H, W, 2]
                 confidences.append(conf[0].permute(1, 2, 0).cpu())  # [H, W, 1]
@@ -113,51 +136,132 @@ class RAFTFlowExtractor:
 
     @classmethod
     def _load_model(cls, model_name, device):
-        """Load RAFT model with caching."""
+        """Load RAFT or SEA-RAFT model with caching.
+
+        Returns:
+            tuple: (model, model_type) where model_type is 'raft' or 'searaft'
+        """
         if cls._model is None or cls._model_path != model_name:
-            try:
-                import sys
-                sys.path.append('path/to/RAFT/core')  # Add RAFT to path if needed
-                from raft import RAFT
-                import argparse
-            except ImportError:
-                raise ImportError(
-                    "RAFT not found. Install with:\n"
-                    "pip install git+https://github.com/princeton-vl/RAFT.git\n"
-                    "Or clone and add to PYTHONPATH"
-                )
+            # Detect model type
+            is_searaft = model_name.startswith("sea-raft")
 
-            # Create RAFT model with default args
-            args = argparse.Namespace()
-            args.small = (model_name == "raft-small")
-            args.mixed_precision = False
-            args.alternate_corr = False
+            if is_searaft:
+                # ========== Load SEA-RAFT ==========
+                try:
+                    # Try importing SEA-RAFT modules
+                    import sys
+                    # Attempt to import from installed package or cloned repo
+                    try:
+                        from core.raft import RAFT as SEARAFT
+                    except ImportError:
+                        # If not in package, try adding to path
+                        sys.path.append('path/to/SEA-RAFT/core')
+                        from raft import RAFT as SEARAFT
 
-            cls._model = RAFT(args)
+                    from huggingface_hub import hf_hub_download
+                except ImportError as e:
+                    raise ImportError(
+                        f"SEA-RAFT or huggingface_hub not found. Install with:\n"
+                        f"pip install git+https://github.com/princeton-vl/SEA-RAFT.git\n"
+                        f"pip install huggingface-hub>=0.20.0\n"
+                        f"Or clone SEA-RAFT repo and add to PYTHONPATH\n"
+                        f"Error: {e}"
+                    )
 
-            # Load weights from checkpoint file
-            # User must download weights and place in models/raft/ folder
-            model_paths = {
-                "raft-things": "models/raft/raft-things.pth",
-                "raft-sintel": "models/raft/raft-sintel.pth",
-                "raft-small": "models/raft/raft-small.pth",
-            }
+                # Map model names to HuggingFace repos
+                hf_models = {
+                    "sea-raft-small": "MemorySlices/SEA-RAFT-S",
+                    "sea-raft-medium": "MemorySlices/Tartan-C-T-TSKH-spring540x960-M",
+                    "sea-raft-large": "MemorySlices/SEA-RAFT-L",
+                }
 
-            checkpoint_path = model_paths.get(model_name, model_paths["raft-sintel"])
+                if model_name not in hf_models:
+                    raise ValueError(f"Unknown SEA-RAFT model: {model_name}")
 
-            try:
-                checkpoint = torch.load(checkpoint_path, map_location=device)
-                cls._model.load_state_dict(checkpoint)
-            except FileNotFoundError:
-                raise FileNotFoundError(
-                    f"RAFT checkpoint not found at {checkpoint_path}\n"
-                    f"Download from https://github.com/princeton-vl/RAFT and place in models/raft/"
-                )
+                repo_id = hf_models[model_name]
+                print(f"Loading SEA-RAFT from HuggingFace: {repo_id}")
+                print("First run will download model (~100-200MB), subsequent runs use cache...")
 
-            cls._model = cls._model.to(device).eval()
-            cls._model_path = model_name
+                try:
+                    # Download checkpoint from HuggingFace Hub (auto-caches)
+                    checkpoint_path = hf_hub_download(
+                        repo_id=repo_id,
+                        filename="model.pth",
+                        cache_dir=None  # Uses default ~/.cache/huggingface
+                    )
 
-        return cls._model
+                    # Load checkpoint
+                    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+                    # Create SEA-RAFT model (use same API as RAFT)
+                    import argparse
+                    args = argparse.Namespace()
+                    args.small = (model_name == "sea-raft-small")
+                    args.mixed_precision = False
+                    args.alternate_corr = False
+
+                    cls._model = SEARAFT(args)
+                    cls._model.load_state_dict(checkpoint)
+                    cls._model = cls._model.to(device).eval()
+                    cls._model_path = model_name
+                    cls._model_type = 'searaft'
+
+                    print(f"✓ SEA-RAFT model loaded successfully: {model_name}")
+
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to load SEA-RAFT model from HuggingFace.\n"
+                        f"Model: {repo_id}\n"
+                        f"Error: {e}\n"
+                        f"Try: Check internet connection or use RAFT models instead."
+                    )
+
+            else:
+                # ========== Load Original RAFT ==========
+                try:
+                    import sys
+                    sys.path.append('path/to/RAFT/core')  # Add RAFT to path if needed
+                    from raft import RAFT
+                    import argparse
+                except ImportError:
+                    raise ImportError(
+                        "RAFT not found. Install with:\n"
+                        "pip install git+https://github.com/princeton-vl/RAFT.git\n"
+                        "Or clone and add to PYTHONPATH"
+                    )
+
+                # Create RAFT model with default args
+                args = argparse.Namespace()
+                args.small = (model_name == "raft-small")
+                args.mixed_precision = False
+                args.alternate_corr = False
+
+                cls._model = RAFT(args)
+
+                # Load weights from checkpoint file
+                # User must download weights and place in models/raft/ folder
+                model_paths = {
+                    "raft-things": "models/raft/raft-things.pth",
+                    "raft-sintel": "models/raft/raft-sintel.pth",
+                    "raft-small": "models/raft/raft-small.pth",
+                }
+
+                checkpoint_path = model_paths.get(model_name, model_paths["raft-sintel"])
+
+                try:
+                    checkpoint = torch.load(checkpoint_path, map_location=device)
+                    cls._model.load_state_dict(checkpoint)
+                except FileNotFoundError:
+                    raise FileNotFoundError(
+                        f"RAFT checkpoint not found at {checkpoint_path}\n"
+                        f"Download from https://github.com/princeton-vl/RAFT and place in models/raft/"
+                    )
+
+                cls._model = cls._model.to(device).eval()
+                cls._model_path = model_name
+                cls._model_type = 'raft'
+
+        return cls._model, cls._model_type
 
 NODE_CLASS_MAPPINGS["RAFTFlowExtractor"] = RAFTFlowExtractor
 NODE_DISPLAY_NAME_MAPPINGS["RAFTFlowExtractor"] = "RAFT Flow Extractor"
