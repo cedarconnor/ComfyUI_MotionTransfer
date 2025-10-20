@@ -1,0 +1,804 @@
+{
+  "id": "d866fd80-db4e-4b8d-b6af-01fe8b095caa",
+  "revision": 0,
+  "last_node_id": 16,
+  "last_link_id": 18,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "RAFTFlowExtractor",
+      "pos": [
+        1148.789794921875,
+        880.6383666992188
+      ],
+      "size": [
+        270,
+        102
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "confidence",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RAFTFlowExtractor"
+      },
+      "widgets_values": [
+        12,
+        "raft-sintel"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "FlowToSTMap",
+      "pos": [
+        1774.789794921875,
+        821.6383056640625
+      ],
+      "size": [
+        140,
+        26
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "stmap",
+          "type": "IMAGE",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FlowToSTMap"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "TileWarp16K",
+      "pos": [
+        1960.789794921875,
+        756.6383056640625
+      ],
+      "size": [
+        270,
+        126
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "still_image",
+          "type": "IMAGE",
+          "link": 11
+        },
+        {
+          "name": "stmap",
+          "type": "IMAGE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "warped_sequence",
+          "type": "IMAGE",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TileWarp16K"
+      },
+      "widgets_values": [
+        2048,
+        128,
+        "cubic"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "TemporalConsistency",
+      "pos": [
+        2287.789794921875,
+        879.6383056640625
+      ],
+      "size": [
+        270,
+        78
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "stabilized",
+          "type": "IMAGE",
+          "links": [
+            6
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TemporalConsistency"
+      },
+      "widgets_values": [
+        0.3
+      ]
+    },
+    {
+      "id": 2,
+      "type": "FlowSRRefine",
+      "pos": [
+        1465.789794921875,
+        886.6383056640625
+      ],
+      "size": [
+        270,
+        150
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "link": 1
+        },
+        {
+          "name": "guide_image",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "flow_upscaled",
+          "type": "FLOW",
+          "links": [
+            2,
+            5,
+            7,
+            9
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FlowSRRefine"
+      },
+      "widgets_values": [
+        16000,
+        16000,
+        8,
+        0.001
+      ]
+    },
+    {
+      "id": 7,
+      "type": "MeshBuilder2D",
+      "pos": [
+        2318.485107421875,
+        1051.3280029296875
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "mesh_sequence",
+          "type": "MESH",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MeshBuilder2D"
+      },
+      "widgets_values": [
+        32,
+        100
+      ]
+    },
+    {
+      "id": 8,
+      "type": "AdaptiveTessellate",
+      "pos": [
+        2643.43994140625,
+        1177.8154296875
+      ],
+      "size": [
+        279.40625,
+        102
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mesh_sequence",
+          "type": "MESH",
+          "link": 8
+        },
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "refined_mesh",
+          "type": "MESH",
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "AdaptiveTessellate"
+      },
+      "widgets_values": [
+        10,
+        2
+      ]
+    },
+    {
+      "id": 11,
+      "type": "LoadVideo",
+      "pos": [
+        555.1007690429688,
+        801.75537109375
+      ],
+      "size": [
+        270,
+        434
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.64",
+        "Node name for S&R": "LoadVideo"
+      },
+      "widgets_values": [
+        "ComfyUI_00016_.mp4",
+        "image"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "GetVideoComponents",
+      "pos": [
+        895.1008911132812,
+        891.75537109375
+      ],
+      "size": [
+        185.17733764648438,
+        66
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            13
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.64",
+        "Node name for S&R": "GetVideoComponents"
+      }
+    },
+    {
+      "id": 13,
+      "type": "DepthEstimator",
+      "pos": [
+        3215.658935546875,
+        1410.534912109375
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "depth_maps",
+          "type": "IMAGE",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "DepthEstimator"
+      },
+      "widgets_values": [
+        "midas"
+      ]
+    },
+    {
+      "id": 9,
+      "type": "BarycentricWarp",
+      "pos": [
+        2981.513916015625,
+        1109.93408203125
+      ],
+      "size": [
+        291.134765625,
+        78
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "still_image",
+          "type": "IMAGE",
+          "link": 14
+        },
+        {
+          "name": "mesh_sequence",
+          "type": "MESH",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "warped_sequence",
+          "type": "IMAGE",
+          "links": [
+            15,
+            17
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "BarycentricWarp"
+      },
+      "widgets_values": [
+        "linear"
+      ]
+    },
+    {
+      "id": 14,
+      "type": "ProxyReprojector",
+      "pos": [
+        3553.428955078125,
+        1383.093994140625
+      ],
+      "size": [
+        289.798828125,
+        98
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "still_image",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "depth_maps",
+          "type": "IMAGE",
+          "link": 16
+        },
+        {
+          "name": "flow",
+          "type": "FLOW",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "reprojected_sequence",
+          "type": "IMAGE",
+          "links": [
+            18
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ProxyReprojector"
+      },
+      "widgets_values": [
+        1000
+      ]
+    },
+    {
+      "id": 16,
+      "type": "HiResWriter",
+      "pos": [
+        3945.788818359375,
+        1368.4219970703125
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 18
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "HiResWriter"
+      },
+      "widgets_values": [
+        "output/frame",
+        "png",
+        0
+      ]
+    },
+    {
+      "id": 15,
+      "type": "HiResWriter",
+      "pos": [
+        3958.673095703125,
+        1163.88720703125
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "HiResWriter"
+      },
+      "widgets_values": [
+        "output/frame",
+        "png",
+        0
+      ]
+    },
+    {
+      "id": 6,
+      "type": "HiResWriter",
+      "pos": [
+        3962.839111328125,
+        908.2904663085938
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "HiResWriter"
+      },
+      "widgets_values": [
+        "output/frame",
+        "png",
+        0
+      ]
+    },
+    {
+      "id": 10,
+      "type": "LoadImage",
+      "pos": [
+        1568.29541015625,
+        376.3837890625
+      ],
+      "size": [
+        274.080078125,
+        314.0000305175781
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            11,
+            14
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "1_PortoRiverside.jpg",
+        "image"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "FLOW"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      0,
+      "FLOW"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      1,
+      "IMAGE"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      5,
+      2,
+      0,
+      5,
+      1,
+      "FLOW"
+    ],
+    [
+      6,
+      5,
+      0,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      7,
+      2,
+      0,
+      7,
+      0,
+      "FLOW"
+    ],
+    [
+      8,
+      7,
+      0,
+      8,
+      0,
+      "MESH"
+    ],
+    [
+      9,
+      2,
+      0,
+      8,
+      1,
+      "FLOW"
+    ],
+    [
+      10,
+      8,
+      0,
+      9,
+      1,
+      "MESH"
+    ],
+    [
+      11,
+      10,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      12,
+      11,
+      0,
+      12,
+      0,
+      "VIDEO"
+    ],
+    [
+      13,
+      12,
+      0,
+      1,
+      0,
+      "IMAGE"
+    ],
+    [
+      14,
+      10,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      9,
+      0,
+      13,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      13,
+      0,
+      14,
+      1,
+      "IMAGE"
+    ],
+    [
+      17,
+      9,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      18,
+      14,
+      0,
+      16,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.6209213230591556,
+      "offset": [
+        -305.8914081446406,
+        -516.3370779678235
+      ]
+    },
+    "frontendVersion": "1.27.10",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

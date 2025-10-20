@@ -1,0 +1,29 @@
+# ComfyUI Motion Transfer Requirements
+
+# Core dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0  # For guided filter (ximgproc)
+
+# Optical flow (RAFT)
+# Install from source:
+# pip install git+https://github.com/princeton-vl/RAFT.git
+
+# Image I/O
+Pillow>=10.0.0
+imageio>=2.31.0
+
+# High-res file formats (optional but recommended)
+OpenEXR>=1.3.9  # For 16K EXR export
+Imath>=3.1.9    # Required by OpenEXR
+
+# Mesh processing (for Pipeline B)
+scipy>=1.11.0  # For Delaunay triangulation
+
+# Depth estimation (for Pipeline C - optional)
+# timm>=0.9.0  # For DPT/MiDaS models (uncomment if using real depth estimation)
+
+# Utilities
+tqdm>=4.66.0  # Progress bars
