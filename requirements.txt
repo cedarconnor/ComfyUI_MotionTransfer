@@ -22,8 +22,9 @@ Pillow>=10.0.0
 imageio>=2.31.0
 
 # High-res file formats (optional but recommended)
-OpenEXR>=1.3.9  # For 16K EXR export
-Imath>=3.1.9    # Required by OpenEXR
+# Note: EXR support is optional - if installation fails, you can still use PNG/JPG output
+# OpenEXR 3.x includes Imath bundled, no separate install needed
+OpenEXR>=1.3.0  # For 16K EXR export
 
 # Mesh processing (for Pipeline B)
 scipy>=1.11.0  # For Delaunay triangulation
