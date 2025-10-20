@@ -7,6 +7,11 @@ import numpy as np
 import cv2
 from typing import Tuple, List, Optional
 
+# Disable PIL decompression bomb protection for ultra-high-resolution images
+# This package is designed for 16K+ images (up to ~300 megapixels)
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None  # Disable limit entirely for this package
+
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
