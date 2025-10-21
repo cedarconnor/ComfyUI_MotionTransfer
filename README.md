@@ -38,64 +38,156 @@ This node pack provides three complementary pipelines for motion transfer:
 
 ## Installation
 
+**Super Simple - Just 2 Steps!**
+
 1. Clone into ComfyUI custom_nodes:
 ```bash
 cd ComfyUI/custom_nodes
 git clone https://github.com/cedarconnor/ComfyUI_MotionTransfer.git
-cd ComfyUI_MotionTransfer
 ```
 
 2. Install dependencies:
 ```bash
+cd ComfyUI_MotionTransfer
 pip install -r requirements.txt
 ```
 
-3. **Choose your optical flow model:**
+3. Restart ComfyUI
 
-### Option A: SEA-RAFT (Recommended) ⭐
+**That's it!** RAFT code is now bundled directly in the package - no manual repository cloning required!
 
-**Why SEA-RAFT:**
-- 2.3x faster than original RAFT
-- 22% more accurate (ECCV 2024 Best Paper Award Candidate)
-- Auto-downloads models from HuggingFace (no manual setup)
-- Better edge preservation for high-res warping
+### What You Get Out of the Box
 
-**Installation:**
+✅ **Optical Flow Model (RAFT - Bundled)**
+- RAFT code included - works immediately
+- Model weights (~100MB) - manual download required (see below)
+
+✅ **All Pipeline A & B Nodes** - Ready to use immediately
+
+### Download RAFT Model Weights
+
+After installation, download the RAFT model weights (choose one):
+
+**Option 1: Automatic Download (Recommended)**
 ```bash
-cd ComfyUI/custom_nodes
-git clone https://github.com/princeton-vl/SEA-RAFT.git
-pip install huggingface-hub
+# Windows PowerShell:
+cd ComfyUI/models
+mkdir raft
+cd raft
+Invoke-WebRequest -Uri "https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip" -OutFile "models.zip"
+Expand-Archive -Path "models.zip" -DestinationPath "." -Force
+
+# Linux/Mac:
+cd ComfyUI/models
+mkdir -p raft
+cd raft
+wget https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip
+unzip models.zip
 ```
 
-SEA-RAFT will be auto-detected when you restart ComfyUI. Models download automatically on first use (~100-200MB, cached to `~/.cache/huggingface`).
+**Option 2: Manual Download**
+1. Download from: https://github.com/princeton-vl/RAFT#demos
+2. Save `raft-sintel.pth` to `ComfyUI/models/raft/`
 
-### Option B: Original RAFT
+### Optional: Pipeline B2 (CoTracker Mesh-Warp)
 
-**Use when:**
-- Compatibility with existing workflows
-- Already have RAFT checkpoints downloaded
-- Using older PyTorch versions (< 2.2.0)
-
-**Installation:**
-```bash
-pip install git+https://github.com/princeton-vl/RAFT.git
-
-# Download models manually and place in ComfyUI/models/raft/
-wget https://github.com/princeton-vl/RAFT/releases/download/v1.0/raft-sintel.pth
-```
-
-4. **(Optional) Install CoTracker for Pipeline B2:**
-
-If you want to use Pipeline B2 (CoTracker Mesh-Warp), install the CoTracker node:
+If you want to use Pipeline B2 (transformer-based point tracking for temporal stability):
 
 ```bash
 cd ComfyUI/custom_nodes
 git clone https://github.com/s9roll7/comfyui_cotracker_node.git
 ```
 
-CoTracker models (~500MB) will auto-download from torch.hub on first use.
+CoTracker models (~500MB) auto-download from torch.hub on first use.
 
-5. Restart ComfyUI
+### Detailed Installation Guide
+
+**Step-by-Step:**
+
+1. **Navigate to ComfyUI custom_nodes directory:**
+   ```bash
+   cd ComfyUI/custom_nodes
+   ```
+
+2. **Clone this repository:**
+   ```bash
+   git clone https://github.com/cedarconnor/ComfyUI_MotionTransfer.git
+   ```
+
+   This will create a `ComfyUI_MotionTransfer` folder containing:
+   - `motion_transfer_nodes.py` - Main node code
+   - `raft_vendor/` - Bundled RAFT optical flow code
+   - `searaft_vendor/` - Bundled SEA-RAFT optical flow code
+   - `requirements.txt` - Python dependencies
+
+3. **Install Python dependencies:**
+   ```bash
+   cd ComfyUI_MotionTransfer
+   pip install -r requirements.txt
+   ```
+
+   This installs:
+   - `huggingface-hub` - For downloading SEA-RAFT model weights
+   - `imageio`, `scipy`, `tqdm` - For image/video processing
+   - (Note: `torch`, `numpy`, `opencv`, `pillow` are already in ComfyUI)
+
+4. **Restart ComfyUI:**
+   - Close ComfyUI completely
+   - Start it again
+   - Check the console for: `[Motion Transfer] Using RAFT from: ...` (confirms vendored code loaded)
+
+5. **First Run - Model Weights Download:**
+
+   When you run your first workflow:
+   - **SEA-RAFT models**: Auto-download from HuggingFace (~100-200MB)
+   - **RAFT models**: You'll need to download manually (see below)
+
+**RAFT Model Weights (if using raft-sintel/raft-things/raft-small):**
+
+```bash
+# Create models directory
+mkdir -p ComfyUI/models/raft
+
+# Download weights (choose one):
+# raft-sintel (recommended for natural videos)
+wget https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip -O models.zip
+unzip models.zip -d ComfyUI/models/raft/
+
+# Or download individually:
+# raft-things.pth, raft-sintel.pth, raft-small.pth
+```
+
+### What Changed from Previous Versions?
+
+**Old Installation (v0.1-v0.4):**
+- ❌ Required manually cloning RAFT repository
+- ❌ Required adding RAFT path to sys.path
+- ❌ Complex setup with multiple steps
+
+**New Installation (v0.5+):**
+- ✅ RAFT code bundled automatically
+- ✅ Single git clone
+- ✅ Works out of the box
+- ✅ No external repository dependencies
+
+**Why This Change?**
+- Simpler user experience (1 clone instead of 2)
+- Ensures version compatibility
+- Reduces installation errors
+- RAFT code is lightweight (~50KB)
+
+### External Dependencies Still Required
+
+**Only CoTracker (Pipeline B2)** requires external installation:
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/s9roll7/comfyui_cotracker_node.git
+```
+
+This is kept separate because:
+- It's optional (Pipeline B2 only)
+- It has its own dependencies and models
+- Not all users need point tracking
 
 ## Node Reference
 
@@ -310,15 +402,15 @@ See `examples/` directory for complete workflow JSON files:
 - Use PNG instead of keeping frames in memory
 
 **RAFT/SEA-RAFT import error:**
-- For SEA-RAFT: `pip install git+https://github.com/princeton-vl/SEA-RAFT.git`
-- For original RAFT: `pip install git+https://github.com/princeton-vl/RAFT.git`
-- Check CUDA compatibility with your PyTorch version (PyTorch >= 2.2.0 required for SEA-RAFT)
-- Install huggingface-hub for SEA-RAFT: `pip install huggingface-hub`
+- **This should never happen!** RAFT/SEA-RAFT code is bundled with the package
+- If you see this error, please report it at: https://github.com/cedarconnor/ComfyUI_MotionTransfer/issues
+- As a workaround, check that `raft_vendor/` and `searaft_vendor/` directories exist in the package
 
 **SEA-RAFT model download fails:**
-- Check internet connection
-- Try manually downloading from HuggingFace: https://huggingface.co/MemorySlices
-- Fallback to original RAFT models if needed
+- Check internet connection (models download from HuggingFace on first use)
+- Check CUDA compatibility with your PyTorch version (PyTorch >= 2.2.0 required)
+- Install/upgrade huggingface-hub: `pip install -U huggingface-hub`
+- Fallback to original RAFT models if needed (select "raft-sintel" instead of "sea-raft-medium")
 
 ## Technical Details
 

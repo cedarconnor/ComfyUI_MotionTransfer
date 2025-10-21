@@ -49,13 +49,10 @@ class RAFTFlowExtractor:
                 "model_name": ([
                     "raft-sintel",
                     "raft-things",
-                    "raft-small",
-                    "sea-raft-small",
-                    "sea-raft-medium",
-                    "sea-raft-large"
+                    "raft-small"
                 ], {
                     "default": "raft-sintel",
-                    "tooltip": "Optical flow model. Default 'raft-sintel': works out-of-box, no extra install. SEA-RAFT (recommended if installed): 2.3x faster, 22% more accurate (ECCV 2024 Best Paper Candidate), requires manual install (see README). RAFT models work immediately. SEA-RAFT models require: git clone https://github.com/princeton-vl/SEA-RAFT.git"
+                    "tooltip": "Optical flow model. Uses bundled RAFT code (works out-of-box). Models auto-download on first use: raft-sintel (natural videos, recommended), raft-things (synthetic data), raft-small (faster, lower quality). Download weights from: https://github.com/princeton-vl/RAFT#demos"
                 }),
             }
         }
@@ -156,46 +153,60 @@ class RAFTFlowExtractor:
                     import sys
                     import os
 
-                    # Try to find SEA-RAFT in common locations
+                    # Get the absolute path to this package directory
+                    package_dir = os.path.dirname(os.path.abspath(__file__))
+                    custom_nodes_dir = os.path.dirname(package_dir)
+
                     searaft_paths = [
-                        # If cloned to ComfyUI/custom_nodes/SEA-RAFT/core
-                        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'SEA-RAFT', 'core'),
-                        # If cloned elsewhere and added to PYTHONPATH
-                        'SEA-RAFT/core',
+                        # First try vendored code (bundled with this package)
+                        os.path.join(package_dir, 'searaft_vendor', 'core'),
+                        # Fallback: external clone in ComfyUI/custom_nodes/SEA-RAFT/core
+                        os.path.join(custom_nodes_dir, 'SEA-RAFT', 'core'),
                     ]
 
                     # Try importing from each possible location
                     SEARAFT = None
                     for path in searaft_paths:
-                        if os.path.exists(path) and path not in sys.path:
-                            sys.path.insert(0, path)
+                        abs_path = os.path.abspath(path)
+                        print(f"[Motion Transfer] Checking SEA-RAFT path: {abs_path} (exists: {os.path.exists(abs_path)})")
+                        if os.path.exists(abs_path) and abs_path not in sys.path:
+                            # Save old sys.path to restore on failure
+                            old_syspath = sys.path.copy()
+                            sys.path.insert(0, abs_path)
                             try:
-                                from raft import RAFT as SEARAFT
-                                print(f"✓ Found SEA-RAFT at: {path}")
-                                break
-                            except ImportError:
-                                sys.path.remove(path)
+                                # Force reimport by removing from cache if exists
+                                if 'raft' in sys.modules:
+                                    del sys.modules['raft']
+                                if 'utils' in sys.modules:
+                                    del sys.modules['utils']
+                                if 'update' in sys.modules:
+                                    del sys.modules['update']
 
-                    # If still not found, try direct import (in case it's already in PYTHONPATH)
+                                from raft import RAFT as SEARAFT
+                                print(f"[Motion Transfer] ✓ Using SEA-RAFT from: {abs_path}")
+                                break
+                            except ImportError as ie:
+                                print(f"[Motion Transfer] ✗ Failed to import from {abs_path}: {ie}")
+                                import traceback
+                                traceback.print_exc()
+                                # Restore sys.path
+                                sys.path = old_syspath
+                        elif abs_path in sys.path:
+                            print(f"[Motion Transfer] Path already in sys.path: {abs_path}")
+
+                    # If still not found, raise helpful error
                     if SEARAFT is None:
-                        try:
-                            from core.raft import RAFT as SEARAFT
-                            print("✓ Found SEA-RAFT in PYTHONPATH")
-                        except ImportError:
-                            from raft import RAFT as SEARAFT
-                            print("✓ Found SEA-RAFT in system path")
+                        raise ImportError(f"SEA-RAFT module not found. Tried paths: {searaft_paths}")
 
                     from huggingface_hub import hf_hub_download
 
                 except ImportError as e:
                     raise ImportError(
-                        f"SEA-RAFT not found. Please install:\n\n"
-                        f"1. Clone SEA-RAFT repository:\n"
-                        f"   cd ComfyUI/custom_nodes\n"
-                        f"   git clone https://github.com/princeton-vl/SEA-RAFT.git\n\n"
-                        f"2. Install huggingface-hub:\n"
-                        f"   pip install huggingface-hub>=0.20.0\n\n"
-                        f"3. Restart ComfyUI\n\n"
+                        f"SEA-RAFT not found. This should not happen as SEA-RAFT is bundled with Motion Transfer.\n\n"
+                        f"Note: huggingface-hub is still required. Install with:\n"
+                        f"  pip install huggingface-hub>=0.20.0\n\n"
+                        f"If you see this error, please report it at:\n"
+                        f"https://github.com/cedarconnor/ComfyUI_MotionTransfer/issues\n\n"
                         f"Error details: {e}"
                     )
 
@@ -253,39 +264,57 @@ class RAFTFlowExtractor:
                     import sys
                     import os
 
-                    # Try to find RAFT in common locations
+                    # Get the absolute path to this package directory
+                    package_dir = os.path.dirname(os.path.abspath(__file__))
+                    custom_nodes_dir = os.path.dirname(package_dir)
+
                     raft_paths = [
-                        # If cloned to ComfyUI/custom_nodes/RAFT/core
-                        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'RAFT', 'core'),
-                        # If cloned elsewhere and added to PYTHONPATH
-                        'RAFT/core',
+                        # First try vendored code (bundled with this package)
+                        os.path.join(package_dir, 'raft_vendor', 'core'),
+                        # Fallback: external clone in ComfyUI/custom_nodes/RAFT/core
+                        os.path.join(custom_nodes_dir, 'RAFT', 'core'),
                     ]
 
                     # Try importing from each possible location
                     RAFT = None
                     for path in raft_paths:
-                        if os.path.exists(path) and path not in sys.path:
-                            sys.path.insert(0, path)
+                        abs_path = os.path.abspath(path)
+                        print(f"[Motion Transfer] Checking RAFT path: {abs_path} (exists: {os.path.exists(abs_path)})")
+                        if os.path.exists(abs_path) and abs_path not in sys.path:
+                            # Save old sys.path to restore on failure
+                            old_syspath = sys.path.copy()
+                            sys.path.insert(0, abs_path)
                             try:
-                                from raft import RAFT
-                                print(f"✓ Found RAFT at: {path}")
-                                break
-                            except ImportError:
-                                sys.path.remove(path)
+                                # Force reimport by removing from cache if exists
+                                if 'raft' in sys.modules:
+                                    del sys.modules['raft']
+                                if 'utils' in sys.modules:
+                                    del sys.modules['utils']
+                                if 'update' in sys.modules:
+                                    del sys.modules['update']
 
-                    # If still not found, try direct import (in case it's already in PYTHONPATH)
+                                from raft import RAFT
+                                print(f"[Motion Transfer] ✓ Using RAFT from: {abs_path}")
+                                break
+                            except ImportError as ie:
+                                print(f"[Motion Transfer] ✗ Failed to import from {abs_path}: {ie}")
+                                import traceback
+                                traceback.print_exc()
+                                # Restore sys.path
+                                sys.path = old_syspath
+                        elif abs_path in sys.path:
+                            print(f"[Motion Transfer] Path already in sys.path: {abs_path}")
+
+                    # If still not found, raise helpful error
                     if RAFT is None:
-                        from raft import RAFT
-                        print("✓ Found RAFT in PYTHONPATH")
+                        raise ImportError(f"RAFT module not found. Tried paths: {raft_paths}")
 
                     import argparse
                 except ImportError as e:
                     raise ImportError(
-                        f"RAFT not found. Please install:\n\n"
-                        f"1. Clone RAFT repository:\n"
-                        f"   cd ComfyUI/custom_nodes\n"
-                        f"   git clone https://github.com/princeton-vl/RAFT.git\n\n"
-                        f"2. Restart ComfyUI\n\n"
+                        f"RAFT not found. This should not happen as RAFT is bundled with Motion Transfer.\n\n"
+                        f"If you see this error, please report it at:\n"
+                        f"https://github.com/cedarconnor/ComfyUI_MotionTransfer/issues\n\n"
                         f"Error details: {e}"
                     )
 
