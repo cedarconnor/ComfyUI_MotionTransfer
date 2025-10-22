@@ -12,6 +12,9 @@ from typing import Tuple, List, Optional
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None  # Disable limit entirely for this package
 
+# Import unified model loader
+from .models import OpticalFlowModel
+
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
@@ -41,18 +44,21 @@ class RAFTFlowExtractor:
                     "tooltip": "Video frames from ComfyUI video loader. Expects [B, H, W, C] batch of images."
                 }),
                 "raft_iters": ("INT", {
-                    "default": 8,
+                    "default": 12,
                     "min": 6,
                     "max": 32,
-                    "tooltip": "Refinement iterations. SEA-RAFT needs fewer (6-8) than RAFT (12-20) for same quality. Default 8 works well for both."
+                    "tooltip": "Refinement iterations. SEA-RAFT needs fewer (6-8) than RAFT (12-20) for same quality. Will auto-adjust to 8 for SEA-RAFT if you leave at default 12."
                 }),
                 "model_name": ([
                     "raft-sintel",
                     "raft-things",
-                    "raft-small"
+                    "raft-small",
+                    "sea-raft-small",
+                    "sea-raft-medium",
+                    "sea-raft-large"
                 ], {
                     "default": "raft-sintel",
-                    "tooltip": "Optical flow model. Uses bundled RAFT code (works out-of-box). Models auto-download on first use: raft-sintel (natural videos, recommended), raft-things (synthetic data), raft-small (faster, lower quality). Download weights from: https://github.com/princeton-vl/RAFT#demos"
+                    "tooltip": "Optical flow model. RAFT: original (2020), requires manual model download. SEA-RAFT: newer (ECCV 2024), 2.3x faster with 22% better accuracy, auto-downloads from HuggingFace. Recommended: sea-raft-medium for best speed/quality balance."
                 }),
             }
         }
@@ -78,6 +84,11 @@ class RAFTFlowExtractor:
 
         # Load model (RAFT or SEA-RAFT, cached)
         model, model_type = self._load_model(model_name, device)
+
+        # Auto-adjust iterations for SEA-RAFT if user left default
+        if model_type == 'searaft' and raft_iters == 12:
+            raft_iters = 8
+            print(f"[Motion Transfer] Auto-adjusted iterations to {raft_iters} for SEA-RAFT (faster convergence)")
 
         # Convert ComfyUI format [B, H, W, C] to torch [B, C, H, W]
         if isinstance(images, np.ndarray):
@@ -140,214 +151,19 @@ class RAFTFlowExtractor:
     def _load_model(cls, model_name, device):
         """Load RAFT or SEA-RAFT model with caching.
 
+        Uses the new unified OpticalFlowModel loader which handles both
+        RAFT and SEA-RAFT models cleanly without sys.path manipulation.
+
         Returns:
             tuple: (model, model_type) where model_type is 'raft' or 'searaft'
         """
         if cls._model is None or cls._model_path != model_name:
-            # Detect model type
-            is_searaft = model_name.startswith("sea-raft")
+            # Use the new unified loader - much simpler!
+            model, model_type = OpticalFlowModel.load(model_name, device)
 
-            if is_searaft:
-                # ========== Load SEA-RAFT ==========
-                try:
-                    import sys
-                    import os
-
-                    # Get the absolute path to this package directory
-                    package_dir = os.path.dirname(os.path.abspath(__file__))
-                    custom_nodes_dir = os.path.dirname(package_dir)
-
-                    searaft_paths = [
-                        # First try vendored code (bundled with this package)
-                        os.path.join(package_dir, 'searaft_vendor', 'core'),
-                        # Fallback: external clone in ComfyUI/custom_nodes/SEA-RAFT/core
-                        os.path.join(custom_nodes_dir, 'SEA-RAFT', 'core'),
-                    ]
-
-                    # Try importing from each possible location
-                    SEARAFT = None
-                    for path in searaft_paths:
-                        abs_path = os.path.abspath(path)
-                        print(f"[Motion Transfer] Checking SEA-RAFT path: {abs_path} (exists: {os.path.exists(abs_path)})")
-                        if os.path.exists(abs_path) and abs_path not in sys.path:
-                            # Save old sys.path to restore on failure
-                            old_syspath = sys.path.copy()
-                            sys.path.insert(0, abs_path)
-                            try:
-                                # Force reimport by removing from cache if exists
-                                if 'raft' in sys.modules:
-                                    del sys.modules['raft']
-                                if 'utils' in sys.modules:
-                                    del sys.modules['utils']
-                                if 'update' in sys.modules:
-                                    del sys.modules['update']
-
-                                from raft import RAFT as SEARAFT
-                                print(f"[Motion Transfer] ✓ Using SEA-RAFT from: {abs_path}")
-                                break
-                            except ImportError as ie:
-                                print(f"[Motion Transfer] ✗ Failed to import from {abs_path}: {ie}")
-                                import traceback
-                                traceback.print_exc()
-                                # Restore sys.path
-                                sys.path = old_syspath
-                        elif abs_path in sys.path:
-                            print(f"[Motion Transfer] Path already in sys.path: {abs_path}")
-
-                    # If still not found, raise helpful error
-                    if SEARAFT is None:
-                        raise ImportError(f"SEA-RAFT module not found. Tried paths: {searaft_paths}")
-
-                    from huggingface_hub import hf_hub_download
-
-                except ImportError as e:
-                    raise ImportError(
-                        f"SEA-RAFT not found. This should not happen as SEA-RAFT is bundled with Motion Transfer.\n\n"
-                        f"Note: huggingface-hub is still required. Install with:\n"
-                        f"  pip install huggingface-hub>=0.20.0\n\n"
-                        f"If you see this error, please report it at:\n"
-                        f"https://github.com/cedarconnor/ComfyUI_MotionTransfer/issues\n\n"
-                        f"Error details: {e}"
-                    )
-
-                # Map model names to HuggingFace repos
-                hf_models = {
-                    "sea-raft-small": "MemorySlices/SEA-RAFT-S",
-                    "sea-raft-medium": "MemorySlices/Tartan-C-T-TSKH-spring540x960-M",
-                    "sea-raft-large": "MemorySlices/SEA-RAFT-L",
-                }
-
-                if model_name not in hf_models:
-                    raise ValueError(f"Unknown SEA-RAFT model: {model_name}")
-
-                repo_id = hf_models[model_name]
-                print(f"Loading SEA-RAFT from HuggingFace: {repo_id}")
-                print("First run will download model (~100-200MB), subsequent runs use cache...")
-
-                try:
-                    # Download checkpoint from HuggingFace Hub (auto-caches)
-                    checkpoint_path = hf_hub_download(
-                        repo_id=repo_id,
-                        filename="model.pth",
-                        cache_dir=None  # Uses default ~/.cache/huggingface
-                    )
-
-                    # Load checkpoint
-                    checkpoint = torch.load(checkpoint_path, map_location=device)
-
-                    # Create SEA-RAFT model (use same API as RAFT)
-                    import argparse
-                    args = argparse.Namespace()
-                    args.small = (model_name == "sea-raft-small")
-                    args.mixed_precision = False
-                    args.alternate_corr = False
-
-                    cls._model = SEARAFT(args)
-                    cls._model.load_state_dict(checkpoint)
-                    cls._model = cls._model.to(device).eval()
-                    cls._model_path = model_name
-                    cls._model_type = 'searaft'
-
-                    print(f"✓ SEA-RAFT model loaded successfully: {model_name}")
-
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to load SEA-RAFT model from HuggingFace.\n"
-                        f"Model: {repo_id}\n"
-                        f"Error: {e}\n"
-                        f"Try: Check internet connection or use RAFT models instead."
-                    )
-
-            else:
-                # ========== Load Original RAFT ==========
-                try:
-                    import sys
-                    import os
-
-                    # Get the absolute path to this package directory
-                    package_dir = os.path.dirname(os.path.abspath(__file__))
-                    custom_nodes_dir = os.path.dirname(package_dir)
-
-                    raft_paths = [
-                        # First try vendored code (bundled with this package)
-                        os.path.join(package_dir, 'raft_vendor', 'core'),
-                        # Fallback: external clone in ComfyUI/custom_nodes/RAFT/core
-                        os.path.join(custom_nodes_dir, 'RAFT', 'core'),
-                    ]
-
-                    # Try importing from each possible location
-                    RAFT = None
-                    for path in raft_paths:
-                        abs_path = os.path.abspath(path)
-                        print(f"[Motion Transfer] Checking RAFT path: {abs_path} (exists: {os.path.exists(abs_path)})")
-                        if os.path.exists(abs_path) and abs_path not in sys.path:
-                            # Save old sys.path to restore on failure
-                            old_syspath = sys.path.copy()
-                            sys.path.insert(0, abs_path)
-                            try:
-                                # Force reimport by removing from cache if exists
-                                if 'raft' in sys.modules:
-                                    del sys.modules['raft']
-                                if 'utils' in sys.modules:
-                                    del sys.modules['utils']
-                                if 'update' in sys.modules:
-                                    del sys.modules['update']
-
-                                from raft import RAFT
-                                print(f"[Motion Transfer] ✓ Using RAFT from: {abs_path}")
-                                break
-                            except ImportError as ie:
-                                print(f"[Motion Transfer] ✗ Failed to import from {abs_path}: {ie}")
-                                import traceback
-                                traceback.print_exc()
-                                # Restore sys.path
-                                sys.path = old_syspath
-                        elif abs_path in sys.path:
-                            print(f"[Motion Transfer] Path already in sys.path: {abs_path}")
-
-                    # If still not found, raise helpful error
-                    if RAFT is None:
-                        raise ImportError(f"RAFT module not found. Tried paths: {raft_paths}")
-
-                    import argparse
-                except ImportError as e:
-                    raise ImportError(
-                        f"RAFT not found. This should not happen as RAFT is bundled with Motion Transfer.\n\n"
-                        f"If you see this error, please report it at:\n"
-                        f"https://github.com/cedarconnor/ComfyUI_MotionTransfer/issues\n\n"
-                        f"Error details: {e}"
-                    )
-
-                # Create RAFT model with default args
-                args = argparse.Namespace()
-                args.small = (model_name == "raft-small")
-                args.mixed_precision = False
-                args.alternate_corr = False
-
-                cls._model = RAFT(args)
-
-                # Load weights from checkpoint file
-                # User must download weights and place in models/raft/ folder
-                model_paths = {
-                    "raft-things": "models/raft/raft-things.pth",
-                    "raft-sintel": "models/raft/raft-sintel.pth",
-                    "raft-small": "models/raft/raft-small.pth",
-                }
-
-                checkpoint_path = model_paths.get(model_name, model_paths["raft-sintel"])
-
-                try:
-                    checkpoint = torch.load(checkpoint_path, map_location=device)
-                    cls._model.load_state_dict(checkpoint)
-                except FileNotFoundError:
-                    raise FileNotFoundError(
-                        f"RAFT checkpoint not found at {checkpoint_path}\n"
-                        f"Download from https://github.com/princeton-vl/RAFT and place in models/raft/"
-                    )
-
-                cls._model = cls._model.to(device).eval()
-                cls._model_path = model_name
-                cls._model_type = 'raft'
+            cls._model = model
+            cls._model_path = model_name
+            cls._model_type = model_type
 
         return cls._model, cls._model_type
 

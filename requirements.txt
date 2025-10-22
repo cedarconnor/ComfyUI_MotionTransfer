@@ -12,11 +12,12 @@
 # opencv-contrib-python>=4.6.0 (for guided filter - ximgproc module)
 # Pillow>=10.0.0
 
-# Optical flow models (install separately - see instructions below)
-# SEA-RAFT: Clone the repository (no pip package available)
-# RAFT: pip install git+https://github.com/princeton-vl/RAFT.git
+# Optical flow models - BUNDLED IN PACKAGE!
+# Both RAFT and SEA-RAFT code is included in raft_vendor/ and searaft_vendor/
+# No external repositories needed!
 
-# HuggingFace Hub (for automatic SEA-RAFT model downloads)
+# HuggingFace Hub (required for SEA-RAFT automatic model downloads)
+# Optional if you only use RAFT models
 huggingface-hub>=0.20.0
 
 # Image I/O
@@ -43,22 +44,31 @@ tqdm>=4.66.0
 # 1. Install base requirements (this file):
 #    pip install -r requirements.txt
 #
-# 2. Choose your optical flow model:
+# 2. Download RAFT model weights (required for RAFT models):
 #
-#    Option A - SEA-RAFT (Recommended - 2.3x faster, 22% more accurate):
-#    cd ComfyUI/custom_nodes
-#    git clone https://github.com/princeton-vl/SEA-RAFT.git
+#    Windows PowerShell:
+#      cd ComfyUI/models
+#      mkdir raft
+#      cd raft
+#      Invoke-WebRequest -Uri "https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip" -OutFile "models.zip"
+#      Expand-Archive -Path "models.zip" -DestinationPath "." -Force
 #
-#    Note: SEA-RAFT will be auto-detected when you restart ComfyUI
+#    Linux/Mac:
+#      cd ComfyUI/models
+#      mkdir -p raft
+#      cd raft
+#      wget https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip
+#      unzip models.zip
 #
-#    Option B - Original RAFT (Backward compatible):
-#    pip install git+https://github.com/princeton-vl/RAFT.git
+# 3. (Optional) For SEA-RAFT models:
+#    No manual download needed! Models auto-download from HuggingFace on first use.
+#    Requires: huggingface-hub (already in requirements.txt above)
 #
-# 3. (Optional) For EXR support on Windows:
+# 4. (Optional) For EXR support on Windows:
 #    pip install OpenEXR>=1.3.0
 #    If this fails, EXR export won't work but PNG/JPG will still work.
 #
-# 4. Restart ComfyUI
+# 5. Restart ComfyUI
 #
 # ============================================================================
 # DEPENDENCY CONFLICTS
