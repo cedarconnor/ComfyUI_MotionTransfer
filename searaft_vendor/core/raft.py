@@ -4,11 +4,11 @@ import math
 import torch.nn as nn
 import torch.nn.functional as F
 
-from update import BasicUpdateBlock
-from corr import CorrBlock
-from utils.utils import coords_grid, InputPadder
-from extractor import ResNetFPN
-from layer import conv1x1, conv3x3
+from .update import BasicUpdateBlock
+from .corr import CorrBlock
+from .utils.utils import coords_grid, InputPadder
+from .extractor import ResNetFPN
+from .layer import conv1x1, conv3x3
 
 from huggingface_hub import PyTorchModelHubMixin
 

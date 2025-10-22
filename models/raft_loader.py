@@ -6,7 +6,7 @@ raft_vendor code. No external dependencies required.
 import torch
 import argparse
 import os
-from typing import Optional
+from collections import OrderedDict
 
 # Use relative import from vendor code (no sys.path hacking!)
 from ..raft_vendor.core.raft import RAFT as RAFT_Original
@@ -84,8 +84,31 @@ class RAFTLoader:
 
         # Load weights from checkpoint
         try:
-            state_dict = torch.load(checkpoint_path, map_location=device)
-            model.load_state_dict(state_dict)
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+
+            if isinstance(checkpoint, dict):
+                if "state_dict" in checkpoint and isinstance(checkpoint["state_dict"], dict):
+                    state_dict = checkpoint["state_dict"]
+                elif "model" in checkpoint and isinstance(checkpoint["model"], dict):
+                    state_dict = checkpoint["model"]
+                else:
+                    state_dict = checkpoint
+            else:
+                state_dict = checkpoint
+
+            # Strip any 'module.' prefixes from DataParallel checkpoints
+            if any(key.startswith("module.") for key in state_dict.keys()):
+                state_dict = OrderedDict(
+                    (key.replace("module.", "", 1), value) for key, value in state_dict.items()
+                )
+
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            if missing or unexpected:
+                raise RuntimeError(
+                    f"Checkpoint incompatible with RAFT architecture.\n"
+                    f"Missing keys: {sorted(missing)}\n"
+                    f"Unexpected keys: {sorted(unexpected)}"
+                )
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load RAFT checkpoint: {checkpoint_path}\n"
@@ -98,7 +121,7 @@ class RAFTLoader:
 
         # Cache the model
         cls._cache[cache_key] = model
-        print(f"[RAFT Loader] ✓ Successfully loaded {model_name} on {device}")
+        print(f"[RAFT Loader] Successfully loaded {model_name} on {device}")
 
         return model
 
