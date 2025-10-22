@@ -36,3 +36,10 @@ test_output/
 *.tmp
 *.bak
 *.log
+
+# CUDA compiled binaries (users build locally)
+cuda/*.dll
+cuda/*.so
+cuda/*.pdb
+cuda/*.exp
+cuda/*.lib
