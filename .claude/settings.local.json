@@ -43,7 +43,12 @@
       "Bash(python:*)",
       "Bash(del:*)",
       "Bash(cat:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(test:*)",
+      "Bash(mkdir:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []

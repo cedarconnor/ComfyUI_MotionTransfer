@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/settings.local.json
+
+# Model weights (users download these)
+models/raft/*.pth
+models/searaft/*.pth
+
+# Test outputs
+output/
+test_output/
+*.png
+*.exr
+*.jpg
+!examples/*.png
+!examples/*.jpg
+
+# Temporary files
+*.tmp
+*.bak
+*.log

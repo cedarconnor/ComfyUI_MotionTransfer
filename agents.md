@@ -196,12 +196,14 @@
 
 ### Before Running ✅
 - [x] Install requirements: `pip install -r requirements.txt`
-- [x] Install RAFT: `pip install git+https://github.com/princeton-vl/RAFT.git`
-- [x] Download RAFT model (raft-sintel.pth recommended)
+- [x] **RAFT/SEA-RAFT code bundled** - No external installation needed!
+- [ ] **Choose model and download weights:**
+  - **Option 1 (Recommended):** Select `sea-raft-medium` - auto-downloads on first use
+  - **Option 2 (Manual):** Download RAFT weights to `ComfyUI/models/raft/` (see README)
 - [ ] Prepare 16K still image (PNG/EXR/TIFF)
 - [ ] Prepare low-res video (720p-1080p, constant FPS)
 - [ ] Check disk space >= 100 GB for output frames
-- [ ] Check VRAM >= 24 GB (or reduce tile_size for 12GB)
+- [ ] Check VRAM >= 24 GB for SEA-RAFT (or reduce tile_size for 12GB)
 
 ### Validation (Future Enhancement)
 - [ ] Seamless stitch verification (checkerboard test)

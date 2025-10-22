@@ -235,13 +235,16 @@ class FlowSRRefine:
         Returns:
             flow_upscaled: [B, H_hi, W_hi, 2] upscaled and refined flow
         """
-        if isinstance(flow, np.ndarray):
-            flow = flow
-        else:
+        # Convert tensors to numpy arrays properly
+        if isinstance(flow, torch.Tensor):
+            flow = flow.cpu().numpy()
+        elif not isinstance(flow, np.ndarray):
             flow = np.array(flow)
 
         if isinstance(guide_image, torch.Tensor):
             guide_image = guide_image.cpu().numpy()
+        elif not isinstance(guide_image, np.ndarray):
+            guide_image = np.array(guide_image)
 
         # Get guide image (use first frame if batch)
         guide = guide_image[0] if len(guide_image.shape) == 4 else guide_image
@@ -638,12 +641,14 @@ class TemporalConsistency:
             prev_stabilized = stabilized[-1]
             # Flow index: flow[0] is frame0→frame1, flow[1] is frame1→frame2, etc.
             # For frame t, we need flow from frame(t-1) to frame(t), which is flow[t-1]
-            flow_fwd = flow[t-1]  # Flow from t-1 to t
+            flow_fwd = flow[t-1]  # Forward flow from t-1 to t
 
-            # Warp previous stabilized frame forward
+            # To warp previous frame forward, we need inverse mapping
+            # Forward flow tells us where pixels move TO, but remap needs where to sample FROM
+            # So we use the inverse: sample from (position - flow)
             map_x, map_y = np.meshgrid(np.arange(w), np.arange(h))
-            map_x = (map_x + flow_fwd[:, :, 0]).astype(np.float32)
-            map_y = (map_y + flow_fwd[:, :, 1]).astype(np.float32)
+            map_x = (map_x - flow_fwd[:, :, 0]).astype(np.float32)  # Inverse warp
+            map_y = (map_y - flow_fwd[:, :, 1]).astype(np.float32)  # Inverse warp
 
             warped_prev = cv2.remap(
                 prev_stabilized, map_x, map_y,
@@ -670,9 +675,10 @@ NODE_DISPLAY_NAME_MAPPINGS["TemporalConsistency"] = "Temporal Consistency"
 # Node 7: HiResWriter - Export high-res sequences
 # ------------------------------------------------------
 class HiResWriter:
-    """Write high-resolution image sequences to disk (EXR, PNG, or video).
+    """Write high-resolution image sequences to disk as individual frames.
 
-    Supports frame sequences and video encoding with various formats.
+    Supports PNG, EXR, and JPG formats. For video encoding, use external tools
+    like FFmpeg on the exported frame sequence.
     """
 
     @classmethod
@@ -1394,12 +1400,15 @@ class ProxyReprojector:
 
         Args:
             still_image: [1, H, W, C] source texture
-            depth_maps: [B, H, W, 1] depth sequence
-            flow: [B, H, W, 2] optical flow for motion estimation
+            depth_maps: [B, H, W, 1] depth sequence (should match still resolution)
+            flow: [B-1 or B, H, W, 2] optical flow - MUST be upscaled to still resolution first!
             focal_length: Camera focal length estimate
 
         Returns:
             reprojected_sequence: [B, H, W, C] reprojected frames
+
+        IMPORTANT: Flow must be pre-upscaled to match still_image resolution!
+        Use FlowSRRefine before this node to upscale flow to high-res.
         """
         if isinstance(still_image, torch.Tensor):
             still_image = still_image.cpu().numpy()
@@ -1424,6 +1433,15 @@ class ProxyReprojector:
                 flow_frame = np.zeros((h, w, 2), dtype=np.float32)
             else:
                 flow_frame = flow[i - 1]
+
+                # Verify flow resolution matches still resolution
+                if flow_frame.shape[0] != h or flow_frame.shape[1] != w:
+                    raise ValueError(
+                        f"Flow resolution mismatch! Flow is {flow_frame.shape[0]}x{flow_frame.shape[1]} "
+                        f"but still image is {h}x{w}. You must upscale flow first using FlowSRRefine node.\n\n"
+                        f"Correct pipeline: RAFTFlowExtractor → FlowSRRefine → ProxyReprojector\n"
+                        f"Current (wrong): RAFTFlowExtractor → ProxyReprojector"
+                    )
 
             # Simple parallax-based warping (placeholder for full 3D reprojection)
             # In production, would solve camera pose and do proper 3D reprojection
