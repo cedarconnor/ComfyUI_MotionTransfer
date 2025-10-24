@@ -310,6 +310,10 @@ Extract dense optical flow between consecutive video frames using RAFT or SEA-RA
 #### FlowToSTMap
 - **Input:** Flow fields
 - **Output:** Normalized STMap (Nuke/AE compatible)
+- **Important:** Automatically accumulates flow vectors for proper motion transfer
+  - RAFT outputs frame-to-frame flow (frame N → N+1)
+  - Motion transfer needs accumulated displacement from original still
+  - This node handles accumulation: frame 1 uses flow[0], frame 2 uses flow[0]+flow[1], etc.
 
 #### TileWarp16K
 - **Input:** High-res still, STMap sequence

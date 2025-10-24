@@ -346,10 +346,13 @@ class FlowToSTMap:
 
         Args:
             flow: [B, H, W, 2] flow fields containing (u, v) pixel displacements
+                  IMPORTANT: flow[i] represents motion from frame i to frame i+1
+                  For motion transfer, we need to ACCUMULATE flow to get total
+                  displacement from the original still image.
 
         Returns:
             stmap: [B, H, W, 3] STMap with RG=normalized coords, B=unused (set to 0)
-                   Format: S = (x + u) / W, T = (y + v) / H
+                   Format: S = (x + accumulated_u) / W, T = (y + accumulated_v) / H
         """
         if isinstance(flow, torch.Tensor):
             flow = flow.cpu().numpy()
@@ -359,15 +362,25 @@ class FlowToSTMap:
         # Create base coordinate grids
         y_coords, x_coords = np.mgrid[0:height, 0:width].astype(np.float32)
 
+        # Accumulate flow vectors for motion transfer
+        # flow[0] = frame0→frame1, flow[1] = frame1→frame2, etc.
+        # For motion transfer from still image:
+        # - Frame 0: no displacement (identity)
+        # - Frame 1: flow[0]
+        # - Frame 2: flow[0] + flow[1]
+        # - Frame 3: flow[0] + flow[1] + flow[2]
+        accumulated_flow_u = np.zeros((height, width), dtype=np.float32)
+        accumulated_flow_v = np.zeros((height, width), dtype=np.float32)
+
         stmaps = []
         for i in range(batch_size):
-            flow_frame = flow[i]  # [H, W, 2]
-            flow_u = flow_frame[:, :, 0]  # Horizontal displacement
-            flow_v = flow_frame[:, :, 1]  # Vertical displacement
+            # Accumulate current flow onto total displacement
+            accumulated_flow_u += flow[i, :, :, 0]
+            accumulated_flow_v += flow[i, :, :, 1]
 
-            # Compute absolute coordinates after displacement
-            new_x = x_coords + flow_u
-            new_y = y_coords + flow_v
+            # Compute absolute coordinates after accumulated displacement
+            new_x = x_coords + accumulated_flow_u
+            new_y = y_coords + accumulated_flow_v
 
             # Normalize to [0, 1] range for STMap
             s = new_x / (width - 1)  # Normalized S coordinate
@@ -1049,6 +1062,11 @@ class SequentialMotionTransfer:
         coord_cache = None  # Cache pixel grids for temporal warp
         written_files = []
 
+        # CRITICAL FIX: Accumulate flow for motion transfer
+        # Each frame needs TOTAL displacement from original still, not just frame-to-frame
+        accumulated_flow_u = None
+        accumulated_flow_v = None
+
         print(f"[Sequential Motion Transfer] Processing {batch_size-1} frames sequentially...")
 
         for t in range(batch_size - 1):
@@ -1090,8 +1108,29 @@ class SequentialMotionTransfer:
             )[0]
             refined_flow = refined_flow_batch[0]  # [H_hi, W_hi, 2]
 
-            stmap_batch = stmap_node.to_stmap(refined_flow_batch)[0]
-            stmap_frame = stmap_batch[0]
+            # CRITICAL FIX: Accumulate flow instead of using frame-to-frame flow
+            # Motion transfer needs total displacement from original still image
+            if accumulated_flow_u is None:
+                accumulated_flow_u = np.zeros((target_height, target_width), dtype=np.float32)
+                accumulated_flow_v = np.zeros((target_height, target_width), dtype=np.float32)
+
+            accumulated_flow_u += refined_flow[:, :, 0]
+            accumulated_flow_v += refined_flow[:, :, 1]
+
+            # Build STMap directly from accumulated flow (bypass FlowToSTMap to avoid double accumulation)
+            y_coords, x_coords = np.mgrid[0:target_height, 0:target_width].astype(np.float32)
+            new_x = x_coords + accumulated_flow_u
+            new_y = y_coords + accumulated_flow_v
+
+            # Normalize to [0, 1] range for STMap
+            s = new_x / (target_width - 1)
+            t = new_y / (target_height - 1)
+
+            # Create 3-channel STMap (RG=coords, B=unused)
+            stmap_frame = np.zeros((target_height, target_width, 3), dtype=np.float32)
+            stmap_frame[:, :, 0] = s
+            stmap_frame[:, :, 1] = t
+            stmap_frame[:, :, 2] = 0.0
 
             warped_batch = warp_node.warp(
                 still_batch,
@@ -1142,7 +1181,7 @@ class SequentialMotionTransfer:
 
             # Free GPU memory for next iteration
             del refined_flow, stmap_frame, warped_frame
-            del flow_tensor, flow_np, refined_flow_batch, stmap_batch, warped_batch, output
+            del flow_tensor, flow_np, refined_flow_batch, warped_batch, output
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
