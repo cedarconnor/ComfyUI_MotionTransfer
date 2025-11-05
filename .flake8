@@ -1,0 +1,47 @@
+[flake8]
+# Flake8 configuration for ComfyUI Motion Transfer
+
+# Maximum line length (matching Black)
+max-line-length = 100
+
+# Ignore specific error codes
+# E203: Whitespace before ':' (conflicts with Black)
+# E501: Line too long (handled by Black)
+# W503: Line break before binary operator (conflicts with Black)
+# E402: Module level import not at top of file (needed for some imports)
+extend-ignore = E203, E501, W503, E402
+
+# Exclude directories
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    *.egg-info,
+    dist,
+    build,
+    raft_vendor,
+    searaft_vendor,
+    motion_transfer_nodes_backup.py,
+    .pytest_cache,
+    .mypy_cache
+
+# Per-file ignores
+per-file-ignores =
+    __init__.py:F401,F403
+    tests/*:F401,F841
+
+# Maximum complexity (cyclomatic complexity)
+max-complexity = 15
+
+# Show source code for each error
+show-source = True
+
+# Show pep8 error code
+show-pep8 = True
+
+# Count errors
+count = True
+
+# Print total number of errors
+statistics = True

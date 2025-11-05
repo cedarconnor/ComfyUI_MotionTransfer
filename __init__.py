@@ -8,20 +8,29 @@ Supports three pipelines:
 - Pipeline B2 (CoTracker Mesh-Warp): Point tracking -> mesh -> barycentric warping
 - Pipeline C (3D-Proxy): Depth estimation -> 3D proxy reprojection (experimental)
 
-Features (v0.6.0):
+Features (v0.8.0):
 - Bundled RAFT and SEA-RAFT optical flow models
-- Modular model loading architecture
-- HuggingFace Hub auto-download for SEA-RAFT
-- 2.3x faster performance with SEA-RAFT
+- Modular architecture with clean separation of concerns
+- Comprehensive unit test suite
+- Pre-commit hooks for code quality
+- Proper logging system
+- CUDA acceleration (5-10× speedup)
 
 Author: AI-assisted development
 License: MIT (RAFT/SEA-RAFT vendor code: BSD-3-Clause)
 """
 
+from .utils.logger import setup_logging, get_logger
+
+# Setup logging on package import
+setup_logging(level="INFO")
+logger = get_logger()
+logger.info("ComfyUI Motion Transfer v0.8.0 loaded")
+
 from .motion_transfer_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
-__version__ = "0.6.0"
+__version__ = "0.8.0"
 
 # Expose for ComfyUI auto-discovery
 WEB_DIRECTORY = "./web"  # For future web UI components
